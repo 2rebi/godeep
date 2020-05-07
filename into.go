@@ -3,10 +3,13 @@ package into
 import (
 	"errors"
 	"reflect"
+	"strings"
+	"unsafe"
 )
 
 const (
 	tagNameFrom = "into"
+	tagValueDeepCopy = "deep"
 )
 
 func Into(src, dst interface{}) error {
@@ -17,21 +20,29 @@ func Into(src, dst interface{}) error {
 	}
 
 	dstVal := reflect.ValueOf(dst)
-	if dstVal.Kind() != reflect.Ptr {
+	if dstVal.Kind() != reflect.Ptr || dstVal.Type().Elem().Kind() != reflect.Struct {
 		return errors.New("destination must be pointer of struct")
 	}
-	into(reflect.ValueOf(src), dstVal.Elem())
+
+	srcVal := reflect.ValueOf(src)
+	srcKind := srcVal.Kind()
+	if srcKind == reflect.Ptr {
+		srcVal = srcVal.Elem()
+		srcKind = srcVal.Kind()
+	}
+
+	if srcKind != reflect.Struct {
+		return errors.New("source must be pointer of struct")
+	}
+
+	into(srcVal, dstVal.Elem(), false)
 	return nil
 }
 
 
-func into(src, dst reflect.Value)  {
+func into(src, dst reflect.Value, isFieldDeepCopy bool)  {
 	if !dst.CanSet() {
 		return
-	}
-
-	if src.Kind() == reflect.Ptr {
-		into(src.Elem(), dst)
 	}
 
 	dstKind := dst.Kind()
@@ -39,6 +50,15 @@ func into(src, dst reflect.Value)  {
 
 	if dstType == src.Type() {
 		switch src.Kind() {
+		case reflect.Ptr:
+			if isFieldDeepCopy {
+				into(src.Elem(), dst, false)
+			} else {
+				dst.SetPointer(unsafe.Pointer(src.Pointer()))
+			}
+		case reflect.Func, //reflect.Interface,
+			reflect.Chan:
+			dst.SetPointer(unsafe.Pointer(src.Pointer()))
 		case reflect.String:
 			dst.SetString(src.String())
 		case reflect.Bool:
@@ -61,9 +81,9 @@ func into(src, dst reflect.Value)  {
 			}
 		case reflect.Array:
 		case reflect.Slice:
-		//TODO case reflect.Interface:
+		case reflect.Struct:
 		}
-	} else {
+	} else if dstKind == src.Kind() {
 		switch dstKind {
 		case reflect.Ptr:
 			elem := dst.Elem()
@@ -71,16 +91,21 @@ func into(src, dst reflect.Value)  {
 				dst.Set(reflect.New(dstType.Elem()))
 				elem = dst.Elem()
 			}
-			into(src, elem)
+			into(src, elem, false)
 		case reflect.Struct:
 			for i, cnt := 0, dstType.NumField(); i < cnt; i++ {
 				field := dstType.Field(i)
 				key := ""
+				isDeepCopy := false
 				if tag, ok := field.Tag.Lookup(tagNameFrom); ok {
 					if tag == "-" {
 						continue
 					}
-					key = tag
+					tagVal := strings.SplitN(tag, ",", 2)
+					if len(tagVal) == 2 {
+						isDeepCopy = tagVal[1] == tagValueDeepCopy
+					}
+					key = tagVal[0]
 				} else {
 					key = field.Name
 				}
@@ -90,10 +115,15 @@ func into(src, dst reflect.Value)  {
 				if !srcField.IsValid() {
 					continue
 				}
-				into(srcField, dst.Field(i))
+
+				into(srcField, dst.Field(i), isDeepCopy)
 			}
+		case reflect.Interface:
+		case reflect.Map:
 		}
-		//TODO case reflect.Map:
+
+	} else {
+
 	}
 
 	return
