@@ -2,25 +2,18 @@ package main
 
 import (
 	"fmt"
-	into "github.com/rebirthlee/golang-into"
+	"github.com/rebirthlee/godeep"
+	"github.com/rebirthlee/godeep/example/unexport"
 )
 
-type Sample1 struct {
-	age int
-	name string
-}
-
 type Sample2 struct {
-	Number int `into:"age"`
-	NickName string `into:"name"`
+	Name string
+	Action func() `from:"action"`
 }
 
 func main() {
 	dst := Sample2{}
-	fmt.Println(into.Into(Sample1{
-		age: 10,
-		name: "Sample",
-	}, &dst))
-
+	godeep.Copy(unexport.New(), &dst)
 	fmt.Println(dst)
+	dst.Action()
 }

@@ -1,3 +1,3 @@
-module github.com/rebirthlee/golang-into
+module github.com/rebirthlee/godeep
 
 go 1.13
