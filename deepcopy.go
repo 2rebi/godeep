@@ -12,7 +12,7 @@ const (
 	tagValueDeepCopy = "deep"
 )
 
-func Copy(src, dst interface{}) {
+func Copy(dst, src interface{}) {
 	if src == nil {
 		panic("src is nil")
 	} else if dst == nil {
@@ -24,14 +24,19 @@ func Copy(src, dst interface{}) {
 		panic("destination must be pointer of struct")
 	}
 	srcVal := reflect.ValueOf(src)
-	if srcVal.Kind() != reflect.Ptr || srcVal.Type().Elem().Kind() != reflect.Struct {
-		panic("destination must be pointer of struct")
+	if srcVal.Kind() == reflect.Map && srcVal.Type().Key().Kind() == reflect.String {
+		cpy(srcVal, dstVal.Elem(), true,false)
+		return
 	}
-	into(srcVal.Elem(), dstVal.Elem(), true,false)
+	if srcVal.Kind() != reflect.Ptr ||
+		srcVal.Type().Elem().Kind() != reflect.Struct {
+		panic("destination must be pointer of struct or map[string]{any}")
+	}
+	cpy(dstVal.Elem(), srcVal.Elem(), true,false)
 }
 
 
-func into(src, dst reflect.Value, isExport, isFieldDeepCopy bool)  {
+func cpy(dst, src reflect.Value, isExport, isFieldDeepCopy bool)  {
 	if !dst.CanSet() {
 		return
 	}
@@ -44,74 +49,74 @@ func into(src, dst reflect.Value, isExport, isFieldDeepCopy bool)  {
 	switch dstKind {
 	case reflect.Ptr:
 		if !isExport {
-			into(fieldClone(src), dst, true, isFieldDeepCopy)
+			cpy(dst, fieldClone(src.Addr()), true, isFieldDeepCopy)
 		} else if !isFieldDeepCopy && srcType.AssignableTo(dstType) {
 			dst.Set(src)
 		} else if !isFieldDeepCopy && srcType.ConvertibleTo(dstType) {
 			dst.Set(src.Convert(dstType))
 		} else {
 			dst.Set(reflect.New(dstType.Elem()))
-			into(src, dst.Elem(), isExport, isFieldDeepCopy)
+			cpy(dst.Elem(), src, isExport, isFieldDeepCopy)
 		}
 	case reflect.Bool:
 		if srcKind == reflect.Ptr {
-			into(src.Elem(), dst, isExport, isFieldDeepCopy)
+			cpy(dst, src.Elem(), isExport, isFieldDeepCopy)
 		} else {
 			dst.SetBool(src.Bool())
 		}
 	case reflect.Int, reflect.Int8, reflect.Int16,
 		reflect.Int32, reflect.Int64:
 		if srcKind == reflect.Ptr {
-			into(src.Elem(), dst, isExport, isFieldDeepCopy)
+			cpy(dst, src.Elem(), isExport, isFieldDeepCopy)
 		} else {
 			dst.SetInt(src.Int())
 		}
 	case reflect.Uint, reflect.Uint8, reflect.Uint16,
 		reflect.Uint32, reflect.Uint64:
 		if srcKind == reflect.Ptr {
-			into(src.Elem(), dst, isExport, isFieldDeepCopy)
+			cpy(dst, src.Elem(), isExport, isFieldDeepCopy)
 		} else {
 			dst.SetUint(src.Uint())
 		}
 	case reflect.Float32, reflect.Float64:
 		if srcKind == reflect.Ptr {
-			into(src.Elem(), dst, isExport, isFieldDeepCopy)
+			cpy(dst, src.Elem(), isExport, isFieldDeepCopy)
 		} else {
 			dst.SetFloat(src.Float())
 		}
 	case reflect.Complex64, reflect.Complex128:
 		if srcKind == reflect.Ptr {
-			into(src.Elem(), dst, isExport, isFieldDeepCopy)
+			cpy(dst, src.Elem(), isExport, isFieldDeepCopy)
 		} else {
 			dst.SetComplex(src.Complex())
 		}
 	case reflect.String:
 		if srcKind == reflect.Ptr {
-			into(src.Elem(), dst, isExport, isFieldDeepCopy)
+			cpy(dst, src.Elem(), isExport, isFieldDeepCopy)
 		} else {
 			dst.SetString(src.String())
 		}
 	case reflect.Func:
 		if srcKind == reflect.Ptr {
-			into(src.Elem(), dst, isExport, isFieldDeepCopy)
+			cpy(dst, src.Elem(), isExport, isFieldDeepCopy)
 		} else if !isExport {
-			into(fieldClone(src.Addr()), dst, true, isFieldDeepCopy)
+			cpy(dst, fieldClone(src.Addr()),true, isFieldDeepCopy)
 		} else {
 			dst.Set(src)
 		}
 	case reflect.Chan:
 		if srcKind == reflect.Ptr {
-			into(src.Elem(), dst, isExport, isFieldDeepCopy)
+			cpy(dst, src.Elem(), isExport, isFieldDeepCopy)
 		} else if !isExport {
-			into(fieldClone(src), dst, true, isFieldDeepCopy)
+			cpy(dst, fieldClone(src), true, isFieldDeepCopy)
 		} else {
 			dst.Set(src)
 		}
 	case reflect.Map:
 		if srcKind == reflect.Ptr {
-			into(src.Elem(), dst, isExport, isFieldDeepCopy)
+			cpy(dst, src.Elem(), isExport, isFieldDeepCopy)
 		} else if !isExport {
-			into(fieldClone(src), dst, true, isFieldDeepCopy)
+			cpy(dst, fieldClone(src), true, isFieldDeepCopy)
 		} else if !isFieldDeepCopy && srcType.AssignableTo(dstType) {
 			dst.Set(src)
 		} else if !isFieldDeepCopy && srcType.ConvertibleTo(dstType) {
@@ -127,26 +132,26 @@ func into(src, dst reflect.Value, isExport, isFieldDeepCopy bool)  {
 			keyPtr := reflect.New(dKeyT)
 			valPtr := reflect.New(dElemT)
 			for i := range keys {
-				into(keys[i], keyPtr.Elem(), true, false)
-				into(src.MapIndex(keys[i]), valPtr.Elem(), true, false)
+				cpy(keyPtr.Elem(), keys[i], true, false)
+				cpy(valPtr.Elem(), src.MapIndex(keys[i]), true, false)
 				dst.SetMapIndex(keyPtr.Elem(), valPtr.Elem())
 			}
 		}
 	case reflect.Array:
 		if srcKind == reflect.Ptr {
-			into(src.Elem(), dst, isExport, isFieldDeepCopy)
+			cpy(dst, src.Elem(), isExport, isFieldDeepCopy)
 		} else if !isExport {
-			into(fieldClone(src), dst, true, isFieldDeepCopy)
+			cpy(dst, fieldClone(src), true, isFieldDeepCopy)
 		} else {
 			for i, cnt := 0, int(math.Min(float64(dst.Len()), float64(src.Len()))); i < cnt; i++ {
-				into(src.Index(i), dst.Index(i), true, false)
+				cpy(dst.Index(i), src.Index(i), true, false)
 			}
 		}
 	case reflect.Slice:
 		if srcKind == reflect.Ptr {
-			into(src.Elem(), dst, isExport, isFieldDeepCopy)
+			cpy(dst, src.Elem(), isExport, isFieldDeepCopy)
 		} else if !isExport {
-			into(fieldClone(src), dst, true, isFieldDeepCopy)
+			cpy(dst, fieldClone(src),true, isFieldDeepCopy)
 		} else if !isFieldDeepCopy && srcType.AssignableTo(dstType) {
 			dst.Set(src)
 		} else if !isFieldDeepCopy && srcType.ConvertibleTo(dstType) {
@@ -154,20 +159,20 @@ func into(src, dst reflect.Value, isExport, isFieldDeepCopy bool)  {
 		} else {
 			dst.Set(reflect.MakeSlice(dst.Type(), src.Len(), int(float64(src.Len()) * 1.5)))
 			for i, cnt := 0, dst.Len(); i < cnt; i++ {
-				into(src.Index(i), dst.Index(i), true, false)
+				cpy(dst.Index(i), src.Index(i),true, false)
 			}
 		}
 	case reflect.Interface:
 		if !srcType.AssignableTo(dstType) && srcKind == reflect.Ptr {
-			into(src.Elem(), dst, isExport, isFieldDeepCopy)
+			cpy(dst, src.Elem(), isExport, isFieldDeepCopy)
 		} else if !isExport {
-			into(fieldClone(src), dst, true, isFieldDeepCopy)
+			cpy(dst, fieldClone(src), true, isFieldDeepCopy)
 		} else {
 			dst.Set(src)
 		}
 	case reflect.Struct:
 		if srcKind == reflect.Ptr {
-			into(src.Elem(), dst, isExport, isFieldDeepCopy)
+			cpy(dst, src.Elem(), isExport, isFieldDeepCopy)
 		} else {
 			for i, cnt := 0, dstType.NumField(); i < cnt; i++ {
 				field := dstType.Field(i)
@@ -186,12 +191,18 @@ func into(src, dst reflect.Value, isExport, isFieldDeepCopy bool)  {
 					key = field.Name
 				}
 
-				srcFieldType, ok := srcType.FieldByName(key)
-				if !ok {
-					continue
+				var srcField reflect.Value
+				if srcKind == reflect.Map {
+					srcField = src.MapIndex(reflect.ValueOf(key))
+				} else {
+					srcFieldType, ok := srcType.FieldByName(key)
+					if !ok {
+						continue
+					}
+					srcField = src.FieldByIndex(srcFieldType.Index)
 				}
-				srcField := src.FieldByIndex(srcFieldType.Index)
-				into(srcField, dst.Field(i), isExport && (key[0] <= 'Z' && key[0] >= 'A'), isDeepCopy)
+
+				cpy(dst.Field(i), srcField, isExport && (key[0] <= 'Z' && key[0] >= 'A'), isDeepCopy)
 			}
 		}
 	}

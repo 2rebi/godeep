@@ -13,7 +13,7 @@ type Sample2 struct {
 
 func main() {
 	dst := Sample2{}
-	godeep.Copy(unexport.New(), &dst)
+	godeep.Copy(&dst, unexport.New())
 	fmt.Println(dst)
 	dst.Action()
 }
