@@ -1,4 +1,4 @@
-module github.com/rebirthlee/godeep
+module github.com/2rebi/godeep
 
 go 1.13
 
